@@ -87,7 +87,13 @@ def translate_ko_to_en(text: str) -> str:
     text = (text or "").strip()
     if not text:
         return ""
-    return GoogleTranslator(source="ko", target="en").translate(text)
+    result = GoogleTranslator(source="ko", target="en").translate(text)
+    if not result or not result.strip():
+        raise RuntimeError(
+            "번역 서비스가 빈 응답을 반환했습니다. 배포 환경의 네트워크가 "
+            "번역 서비스 접속을 차단하고 있을 수 있습니다."
+        )
+    return result
 
 
 # ===== 1. Product Info =====
