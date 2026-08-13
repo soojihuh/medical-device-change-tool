@@ -1,0 +1,61 @@
+{
+  "_comment": "Detector 모델명 변경 예시 (SensorModel-A1 → SensorModel-A2). 대화형 입력 없이 이 파일을 그대로 사용하여 자동 실행 가능.",
+
+  "productInfo": {
+    "deviceName":          "DentalRay Pro 3000",
+    "deviceCommonName":    "Intraoral Dental X-ray System",
+    "deviceClass":         "Class II / IIb",
+    "manufacturer":        "ABC Medical Co., Ltd.",
+    "manufacturerAddress": "123 Industry Road, Seoul, Republic of Korea",
+    "fdaK510":             "K123456",
+    "fdaProductCode":      "MUH",
+    "fdaRegulationNumber": "21 CFR 892.1750",
+    "hcLicenceNo":         "98765",
+    "euCertNumber":        "MDR-2025-001234",
+    "euNotifiedBody":      "TUV SUD (NB 0123)",
+    "euBasicUDIDI":        "0123456789012AB"
+  },
+
+  "changeInfo": {
+    "category":      "labeling",
+    "componentName": "X-ray Detector",
+    "changeTitle":   "Detector Model Designation Update (SensorModel-A1 -> SensorModel-A2)",
+    "beforeValue":   "SensorModel-A1",
+    "afterValue":    "SensorModel-A2",
+    "reason":        "The detector manufacturer harmonized its model nomenclature, removing the trailing '1' from the designation. Initiated to maintain consistency between component-level labeling and system-level documentation.",
+    "description":   "The detector component used in the cleared dental X-ray system has undergone a model designation change by the detector manufacturer. The product itself has not changed; only the alphanumeric designation has been updated. Hardware, firmware, performance specifications, and intended use remain unchanged."
+  },
+
+  "countries": ["FDA", "HC", "EU"],
+
+  "metadata": {
+    "docNumberPrefix": "REG-2026",
+    "revisionNo":      "00",
+    "effectiveDate":   "2026-05-07",
+    "preparedBy":      "Hong Gildong / RA Specialist",
+    "reviewedBy":      "Kim Cheolsu / QA Manager",
+    "approvedBy":      "Lee Younghee / Regulatory Director"
+  },
+
+  "_autoAnswers_comment": "각 국가별 평가 질문에 대한 자동 응답 (대화형 모드를 거치지 않을 때 사용). 모두 false = 중대하지 않은 변경.",
+  "autoAnswers": {
+    "FDA": {
+      "A1": false, "A2": false, "A3": false, "A4": false,
+      "B1": false, "B2": false, "B3": false, "B4": false, "B5": false, "B6": false, "B7": false,
+      "C1": false, "C2": false
+    },
+    "HC": {
+      "a1": false, "a2": false, "a3": false,
+      "b1": false, "b2": false,
+      "c1": false, "c2": false, "c3": false, "c4": false, "c5": false, "c6": false,
+      "d1": false, "d2": false, "d3": false, "d4": false
+    },
+    "EU": {
+      "A1": false, "A2": false, "A3": false, "A4": false, "A5": false, "A6": false,
+      "B1": false, "B2": false,
+      "C1": false, "C2": false, "C3": false,
+      "D1": false, "D2": false,
+      "E_applicable": false, "E1": false, "E2": false
+    }
+  }
+}
