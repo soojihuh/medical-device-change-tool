@@ -19,7 +19,7 @@ from deep_translator import GoogleTranslator
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from assessor_fda import assess_fda
+from assessor_fda import assess_fda, walk_fda_graph, FDA_GRAPH, FDA_MAIN_ITEMS, CHART_ENTRY, TERMINALS
 from assessor_hc import assess_hc
 from assessor_eu import assess_eu
 from doc_fda import build_fda_document
@@ -81,6 +81,33 @@ def sequential_yesno(items, prefix):
 def progress_caption(answers, required_keys):
     answered = sum(1 for k in required_keys if answers.get(k) is not None)
     st.caption(f"진행 상황: {answered} / {len(required_keys)} 문항 답변 완료")
+
+
+def render_fda_node(node_id, prefix, rendered):
+    """FDA 그래프의 한 노드를 렌더링(또는 이미 렌더링됐으면 재사용)한다.
+    같은 노드(예: B5)가 서로 다른 플로우차트에서 공유될 수 있어, 한 실행(run) 안에서
+    위젯이 두 번 생성되지 않도록 rendered(set)로 중복을 막는다."""
+    state_key = f"{prefix}_{node_id.replace('.', '_')}"
+    if state_key in rendered:
+        raw = st.session_state.get(state_key)
+    else:
+        node = FDA_GRAPH[node_id]
+        raw = st.radio(f"{node_id}. {node['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=state_key)
+        rendered.add(state_key)
+    return None if raw is None else raw.startswith("예")
+
+
+def walk_fda_graph_ui(start_id, prefix, rendered):
+    path = []
+    node_id = start_id
+    while node_id not in TERMINALS:
+        node = FDA_GRAPH[node_id]
+        ans = render_fda_node(node_id, prefix, rendered)
+        path.append({"id": node_id, "text": node["text"], "answer": ans})
+        if ans is None:
+            return path, None
+        node_id = node["yes"] if ans else node["no"]
+    return path, node_id
 
 
 def translate_ko_to_en(text: str) -> str:
@@ -212,29 +239,47 @@ countries = st.multiselect(
 st.header("4. 국가별 가이던스 기반 중대성 평가")
 answers_by_country = {}
 
-FDA_ITEMS = [
-    {"key": "A1", "header": "Flowchart A: Labeling Changes", "text": "A1. 의도된 용도(Indications for Use) 변경이 있습니까?"},
-    {"key": "A2", "header": "Flowchart A: Labeling Changes", "text": "A2. 금기사항(Contraindication) 추가/수정이 있습니까?"},
-    {"key": "A3", "header": "Flowchart A: Labeling Changes", "text": "A3. 경고/주의/이상반응 표기에 새로운 정보가 추가됩니까?"},
-    {"key": "A4", "header": "Flowchart A: Labeling Changes", "text": "A4. 라벨 변경이 임상적 기능/성능에 영향을 줄 수 있습니까?"},
-    {"key": "B1", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B1. 작동 원리(Operating Principle) 변경이 있습니까?"},
-    {"key": "B2", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B2. 에너지 유형(Energy Type) 변경이 있습니까?"},
-    {"key": "B3", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B3. 환경 사양(Environmental Spec) 변경이 있습니까?"},
-    {"key": "B4", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B4. 사용 인터페이스(Use of Device) 변경이 있습니까?"},
-    {"key": "B5", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B5. 설계 / 구성품 / 사양 변경이 있습니까? (단순 명칭 변경은 제외)"},
-    {"key": "B6", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B6. 멸균/포장/유효기간 변경이 있습니까?"},
-    {"key": "B7", "header": "Flowchart B: Technology / Engineering / Performance", "text": "B7. 변경이 성능 사양에 중대한 영향을 미칠 수 있습니까?"},
-    {"key": "C1", "header": "Flowchart C: Materials", "text": "C1. 환자/사용자와 접촉하는 재료가 변경되었습니까?"},
-    {"key": "C2", "header": "Flowchart C: Materials", "text": "C2. 재료 변경이 생체적합성에 영향을 줄 수 있습니까?"},
-]
-FDA_KEYS = [it["key"] for it in FDA_ITEMS]
+CHART_LABELS = {
+    "MAIN2": "Flowchart A: Labeling Changes",
+    "MAIN3": "Flowchart B: Technology, Engineering, and Performance Changes",
+    "MAIN4": "Flowchart C: Materials Changes",
+}
+completeness_by_country = {}
 
 if "FDA" in countries:
     with st.expander("🇺🇸 FDA — Deciding When to Submit a 510(k) for a Change to an Existing Device (Oct 2017)", expanded=True):
-        fda_answers = sequential_yesno(FDA_ITEMS, prefix="fda")
-        progress_caption(fda_answers, FDA_KEYS)
+        fda_answers = {}
+        fda_complete = False
+        rendered_fda_nodes = set()
+
+        st.markdown("**Main Flowchart**")
+        main1_key = f"fda_{FDA_MAIN_ITEMS[0]['key']}"
+        main1_choice = st.radio(f"MAIN1. {FDA_MAIN_ITEMS[0]['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=main1_key)
+        fda_answers["MAIN1"] = None if main1_choice is None else main1_choice.startswith("예")
+
+        if fda_answers["MAIN1"] is True:
+            fda_complete = True
+        elif fda_answers["MAIN1"] is False:
+            for item in FDA_MAIN_ITEMS[1:]:
+                choice = st.radio(f"{item['key']}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"fda_{item['key']}")
+                fda_answers[item["key"]] = None if choice is None else choice.startswith("예")
+
+            if all(fda_answers.get(k) is not None for k in ("MAIN2", "MAIN3", "MAIN4")):
+                charts_complete = True
+                for main_key, (entry_node, _label) in CHART_ENTRY.items():
+                    if fda_answers.get(main_key):
+                        st.markdown(f"**{CHART_LABELS[main_key]}**")
+                        path, outcome = walk_fda_graph_ui(entry_node, "fda", rendered_fda_nodes)
+                        for p in path:
+                            fda_answers[p["id"]] = p["answer"]
+                        if outcome is None:
+                            charts_complete = False
+                fda_complete = charts_complete
+
+        st.caption(f"진행 상황: {'답변 완료' if fda_complete else '답변 진행 중'}")
 
     answers_by_country["FDA"] = fda_answers
+    completeness_by_country["FDA"] = fda_complete
 
 HC_ITEMS = [
     {"key": "a1", "header": "(a) Manufacturing Process / Facility / Equipment", "text": "a1. 제조 공정 변경이 있습니까?"},
@@ -261,6 +306,7 @@ if "HC" in countries:
         progress_caption(hc_answers, HC_KEYS)
 
     answers_by_country["HC"] = hc_answers
+    completeness_by_country["HC"] = all(hc_answers.get(k) is not None for k in HC_KEYS)
 
 EU_BASE_ITEMS = [
     {"key": "A1", "header": "Chart A: Design / Performance Specification", "text": "A.01. 설계 또는 성능 사양에 변경이 있고 사용 목적에 영향을 줍니까?"},
@@ -304,22 +350,12 @@ if "EU" in countries:
         progress_caption(eu_answers, eu_required_keys)
 
     answers_by_country["EU"] = eu_answers
+    completeness_by_country["EU"] = all(eu_answers.get(k) is not None for k in eu_required_keys)
 
 # ===== 5. Run Assessment =====
 st.header("5. 평가 실행")
 
-required_keys_by_country = {}
-if "FDA" in countries:
-    required_keys_by_country["FDA"] = FDA_KEYS
-if "HC" in countries:
-    required_keys_by_country["HC"] = HC_KEYS
-if "EU" in countries:
-    required_keys_by_country["EU"] = eu_required_keys
-
-incomplete_countries = [
-    c for c in countries
-    if any(answers_by_country[c].get(k) is None for k in required_keys_by_country[c])
-]
+incomplete_countries = [c for c in countries if not completeness_by_country.get(c, False)]
 all_ready = bool(countries) and not incomplete_countries
 
 if not countries:
@@ -350,7 +386,9 @@ if "assessment_results" in st.session_state:
     st.subheader("평가 결과 요약")
     for r in results:
         result = r["result"]
-        if result["isSignificant"]:
+        if result.get("manualReviewRequired"):
+            st.warning(f"🔍 **{r['country']}** — 수동 검토 필요 → {result['requiredAction']}")
+        elif result["isSignificant"]:
             st.error(f"⚠️ **{r['country']}** — Significant (중대한 변경) → {result['requiredAction']}")
         else:
             st.success(f"✅ **{r['country']}** — Not Significant (중대하지 않은 변경) → {result['requiredAction']}")

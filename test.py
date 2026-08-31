@@ -43,12 +43,16 @@ def test():
     print("  ✅ PASSED\n")
 
     # ===== Test 2: Significant scenario =====
-    print("Test 2: Significant change scenario (intended use change)")
+    print("Test 2: Significant change scenario (new patient population described)")
     sig_fda = dict(auto_answers["FDA"])
-    sig_fda["A1"] = True
+    sig_fda["A1"] = True       # change in indications for use statement
+    sig_fda["A1.1"] = False    # not single-use -> reusable
+    sig_fda["A1.2"] = False    # not Rx -> OTC
+    sig_fda["A1.3"] = False    # not just a name/readability change
+    sig_fda["A1.4"] = True     # describes a new disease/condition/patient population
     sig_result = assess_fda(sig_fda, change_info)
-    assert sig_result["isSignificant"], "Test 2 FAILED: A1=true should be Significant"
-    print(f"  FDA with A1=true: {sig_result['requiredAction']}")
+    assert sig_result["isSignificant"], "Test 2 FAILED: A1.4=true should be Significant"
+    print(f"  FDA with new patient population described: {sig_result['requiredAction']}")
     print("  ✅ PASSED\n")
 
     # ===== Test 3: Document generation =====

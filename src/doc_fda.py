@@ -84,17 +84,19 @@ def build_fda_document(product_info: dict, change_info: dict,
         'guidance "Deciding When to Submit a 510(k) for a Change to an Existing Device."'
     )
 
-    for fc in assessment["flowcharts"]:
-        add_h2(doc, fc["name"])
-        for q in fc["questions"]:
-            answer_text = "Yes" if q["answer"] else "No"
-            add_bullet_bold(doc, f"{q['id']}. ", f"{q['text']} — {answer_text}.")
-        conclusion = (
-            "Could significantly affect — further review required."
-            if fc["significant"]
-            else "Not significant — Letter to File is sufficient."
-        )
-        add_paragraph(doc, f"Conclusion ({fc['name']}): {conclusion}", bold=True)
+    add_h2(doc, "Decision Path")
+    for q in assessment["path"]:
+        if q["answer"] is None:
+            continue
+        answer_text = "Yes" if q["answer"] else "No"
+        add_bullet_bold(doc, f"{q['id']}. ", f"{q['text']} — {answer_text}.")
+
+    conclusion = (
+        "Could significantly affect safety or effectiveness — new 510(k) required."
+        if assessment["isSignificant"]
+        else "Not significant — Letter to File is sufficient."
+    )
+    add_paragraph(doc, f"Conclusion: {conclusion}", bold=True)
 
     # 5. Verification
     add_h1(doc, "5. Verification of Component Equivalence")
