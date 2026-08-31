@@ -264,17 +264,20 @@ if "FDA" in countries:
                 choice = st.radio(f"{item['key']}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"fda_{item['key']}")
                 fda_answers[item["key"]] = None if choice is None else choice.startswith("예")
 
-            if all(fda_answers.get(k) is not None for k in ("MAIN2", "MAIN3", "MAIN4")):
-                charts_complete = True
-                for main_key, (entry_node, _label) in CHART_ENTRY.items():
-                    if fda_answers.get(main_key):
-                        st.markdown(f"**{CHART_LABELS[main_key]}**")
-                        path, outcome = walk_fda_graph_ui(entry_node, "fda", rendered_fda_nodes)
-                        for p in path:
-                            fda_answers[p["id"]] = p["answer"]
-                        if outcome is None:
-                            charts_complete = False
-                fda_complete = charts_complete
+            charts_complete = True
+            for main_key, (entry_node, _label) in CHART_ENTRY.items():
+                gate = fda_answers.get(main_key)
+                if gate is None:
+                    charts_complete = False
+                    continue
+                if gate:
+                    st.markdown(f"**{CHART_LABELS[main_key]}**")
+                    path, outcome = walk_fda_graph_ui(entry_node, "fda", rendered_fda_nodes)
+                    for p in path:
+                        fda_answers[p["id"]] = p["answer"]
+                    if outcome is None:
+                        charts_complete = False
+            fda_complete = charts_complete
 
         st.caption(f"진행 상황: {'답변 완료' if fda_complete else '답변 진행 중'}")
 
