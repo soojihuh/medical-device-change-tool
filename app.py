@@ -260,17 +260,18 @@ if "FDA" in countries:
         if fda_answers["MAIN1"] is True:
             fda_complete = True
         elif fda_answers["MAIN1"] is False:
-            for item in FDA_MAIN_ITEMS[1:]:
-                choice = st.radio(f"{item['key']}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"fda_{item['key']}")
-                fda_answers[item["key"]] = None if choice is None else choice.startswith("예")
-
             charts_complete = True
-            for main_key, (entry_node, _label) in CHART_ENTRY.items():
-                gate = fda_answers.get(main_key)
+            for item in FDA_MAIN_ITEMS[1:]:
+                main_key = item["key"]
+                choice = st.radio(f"{main_key}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"fda_{main_key}")
+                gate = None if choice is None else choice.startswith("예")
+                fda_answers[main_key] = gate
+
                 if gate is None:
                     charts_complete = False
                     continue
                 if gate:
+                    entry_node, _label = CHART_ENTRY[main_key]
                     st.markdown(f"**{CHART_LABELS[main_key]}**")
                     path, outcome = walk_fda_graph_ui(entry_node, "fda", rendered_fda_nodes)
                     for p in path:
