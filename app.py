@@ -222,12 +222,25 @@ if "FDA" in countries:
         main1_choice = st.radio(f"MAIN1. {FDA_MAIN_ITEMS[0]['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=main1_key)
         fda_answers["MAIN1"] = None if main1_choice is None else main1_choice.startswith("예")
 
+        fda_labeling_only = change_info.get("category") == "labeling"
+
         if fda_answers["MAIN1"] is True:
             fda_complete = True
         elif fda_answers["MAIN1"] is False:
+            if fda_labeling_only:
+                st.caption(
+                    "2번에서 '라벨링' 카테고리를 선택하여, MAIN3(기술/엔지니어링/성능)과 MAIN4(재료)는 "
+                    "자동으로 '아니오' 처리되어 표시하지 않습니다."
+                )
+
             charts_complete = True
             for item in FDA_MAIN_ITEMS[1:]:
                 main_key = item["key"]
+
+                if fda_labeling_only and main_key in ("MAIN3", "MAIN4"):
+                    fda_answers[main_key] = False
+                    continue
+
                 choice = st.radio(f"{main_key}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"fda_{main_key}")
                 gate = None if choice is None else choice.startswith("예")
                 fda_answers[main_key] = gate
