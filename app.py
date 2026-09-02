@@ -381,14 +381,22 @@ if "assessment_results" in st.session_state:
         st.header("6. 인허가 문서 생성")
         st.info(f"{len(non_sig)}개 국가({', '.join(r['country'] for r in non_sig)})에서 중대하지 않은 변경으로 판정되어 문서를 생성할 수 있습니다.")
 
-        with st.form("doc_meta_form"):
-            doc_number_prefix = st.text_input("문서 번호 prefix (e.g., LTF-2026)", value="DOC-2026")
-            revision_no = st.text_input("Revision No.", value="00")
-            effective_date = st.text_input("Effective Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"))
-            prepared_by = st.text_input("작성자 (Prepared by)", value="[Name]")
-            reviewed_by = st.text_input("검토자 (Reviewed by)", value="[Name]")
-            approved_by = st.text_input("승인자 (Approved by)", value="[Name]")
-            generate_clicked = st.form_submit_button("📄 문서 생성")
+        needs_metadata = any(r["country"] == "EU" for r in non_sig)
+
+        if needs_metadata:
+            with st.form("doc_meta_form"):
+                doc_number_prefix = st.text_input("문서 번호 prefix (e.g., LTF-2026)", value="DOC-2026")
+                revision_no = st.text_input("Revision No.", value="00")
+                effective_date = st.text_input("Effective Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"))
+                prepared_by = st.text_input("작성자 (Prepared by)", value="[Name]")
+                reviewed_by = st.text_input("검토자 (Reviewed by)", value="[Name]")
+                approved_by = st.text_input("승인자 (Approved by)", value="[Name]")
+                generate_clicked = st.form_submit_button("📄 문서 생성")
+        else:
+            st.caption("FDA/HC 문서는 회사 실제 제출 양식(표지·개정이력 없음)으로 생성되어 별도 정보 입력이 필요 없습니다.")
+            doc_number_prefix, revision_no, effective_date = "DOC-2026", "00", datetime.now().strftime("%Y-%m-%d")
+            prepared_by = reviewed_by = approved_by = ""
+            generate_clicked = st.button("📄 문서 생성")
 
         if generate_clicked:
             metadata = {
