@@ -260,15 +260,7 @@ HC_GRAPH = {
                 "변경합니까?",
         "text_en": "Does the change add a new compatibility claim with another manufacturer's device, or change "
                    "a magnetic resonance (MR) safety claim?",
-        "yes": "SIGNIFICANT", "no": "L5",
-    },
-    "L5": {
-        "text": "이 라벨링 변경이 기존 승인 범위 내 단순 명확화, 편집상 수정, 다국어 추가(타 규제기관 요구), 또는 "
-                "판매중단 기기 참조 제거 등에 해당합니까?",
-        "text_en": "Is this labelling change limited to a clarification within the previously approved scope, "
-                   "an editorial correction, adding languages required by another regulatory jurisdiction, or "
-                   "removing references to discontinued devices?",
-        "yes": "NON_SIGNIFICANT", "no": "SIGNIFICANT",
+        "yes": "SIGNIFICANT", "no": "NON_SIGNIFICANT",
     },
 }
 
