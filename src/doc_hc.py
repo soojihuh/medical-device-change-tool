@@ -1,89 +1,118 @@
 """
-Health Canada Record of Non-Significant Change document builder (Python).
+Health Canada change review document builder (Python).
+Lean format matching the company's actual "Review of changes to Health Canada" template
+(no cover page / TOC / revision history — just the change details and the
+review results, in English for submission).
 """
-from doc_common import (
-    init_document, add_paragraph, add_bullet, add_bullet_bold,
-    add_h1, add_h2, add_spacer,
-    add_info_table, add_before_after_table,
-    add_cover_page, add_revision_history, add_toc, add_footer,
-)
+import re
+
+from doc_common import init_document, add_paragraph, add_spacer, add_page_break, add_info_table
+
+HC_GUIDANCE_TITLE = 'Guidance on how to interpret "significant change" of a medical device: Types of changes'
+
+# Section order on the Health Canada guidance page, lettered the way the company's own
+# review documents label them (labelling lands on "H" because in-vitro-diagnostic
+# materials — not implemented here — occupies "G").
+HC_PREFIX_TO_CHART_LETTER = {
+    "MFG": "A",
+    "QC": "B",
+    "D": "C",
+    "S": "D",
+    "SW": "E",
+    "M": "F",
+    "L": "H",
+}
+HC_MAIN_KEY_TO_CHART_LETTER = {
+    "G_MFG": "A",
+    "G_QC": "B",
+    "G_DESIGN": "C",
+    "G_STERILE": "D",
+    "G_SW": "E",
+    "G_MATERIAL": "F",
+    "G_LABEL": "H",
+}
+
+
+def _node_prefix(node_id: str) -> str:
+    match = re.match(r"^[A-Za-z]+", node_id)
+    return match.group(0) if match else node_id
+
+
+def _qa_line(doc, text_en: str, answer, suffix: str = ""):
+    add_paragraph(doc, text_en, after_pt=2)
+    arrow = "YES" if answer else "NO"
+    add_paragraph(doc, f"→ {arrow}{suffix}", after_pt=10)
 
 
 def build_hc_document(product_info: dict, change_info: dict,
                       assessment: dict, metadata: dict):
-    """Health Canada 비중대 변경 기록 문서 생성"""
-    doc_number = metadata.get("docNumber", "[NSC-HC-XXXX-YYYY]")
+    """Health Canada 변경 검토 문서 생성 (회사 실제 제출 양식)"""
     doc = init_document()
-    add_footer(doc, doc_number)
 
-    add_cover_page(
-        doc,
-        doc_title="RECORD OF NON-SIGNIFICANT CHANGE",
-        doc_subtitle=f"Health Canada – Medical Device Licence\n{change_info['changeTitle']}",
-        doc_number=doc_number,
-        rev_no=metadata.get("revisionNo", "00"),
-        effective_date=metadata.get("effectiveDate", "[YYYY-MM-DD]"),
-        prepared_by=metadata.get("preparedBy", ""),
-        reviewed_by=metadata.get("reviewedBy", ""),
-        approved_by=metadata.get("approvedBy", ""),
-    )
-
-    add_revision_history(doc, metadata)
-    add_toc(doc)
-
-    # ===== Body =====
-    add_h1(doc, "1. Purpose")
-    add_paragraph(
-        doc,
-        'This document records the evaluation of a change to the licensed device under '
-        'Section 34 of the Medical Devices Regulations (CMDR) and the Health Canada Guidance '
-        'Document: "Guidance on the Interpretation of Significant Change of a Medical Device – '
-        'Types of Changes," and confirms that the change is not a significant change. Therefore, '
-        'an amendment to the Medical Device Licence is not required prior to implementation.'
-    )
-
-    add_h1(doc, "2. Device & Licence Information")
-    add_info_table(doc, [
-        ("Model Name",                   product_info.get("modelName", "[Model Name]")),
-        ("Device Class (CMDR)",          product_info.get("deviceClass", "[Class]")),
-        ("Medical Device Licence No.",   product_info.get("hcLicenceNo", "N/A")),
-        ("Licence Holder",               product_info.get("manufacturer", "[Manufacturer]")),
-        ("Manufacturer Address",         product_info.get("manufacturerAddress", "[Address]")),
-    ])
-
-    add_h1(doc, "3. Description of the Change")
-    add_before_after_table(doc, [
-        [f"{change_info['componentName']} – Item",
-         change_info.get("beforeValue", ""),
-         change_info.get("afterValue", "")],
-    ])
+    # ===== Change details =====
+    add_paragraph(doc, "Change the Existing device for Health Canada", bold=True)
     add_spacer(doc)
-    add_paragraph(doc, f"Reason: {change_info.get('reason', '[Reason for change]')}")
-    add_paragraph(doc, f"Description: {change_info.get('description', '[Description]')}")
 
-    add_h1(doc, "4. Significance Assessment per Health Canada Guidance")
+    add_paragraph(doc, "1) Existing device", bold=True)
+    add_paragraph(doc, f"- {product_info.get('hcLicenceNo', 'N/A')} ({product_info.get('modelName', '[Model Name]')})")
+    add_spacer(doc)
+
+    add_paragraph(doc, "2) Change Details", bold=True)
+    add_paragraph(doc, "(1) Existing registration details", bold=True)
+    add_paragraph(doc, change_info.get("componentName", ""), bold=True)
+    add_info_table(doc, [("Before", change_info.get("beforeValue", ""))])
+    add_spacer(doc)
+
+    add_paragraph(doc, "(2) Change request", bold=True)
+    add_paragraph(doc, change_info.get("componentName", ""), bold=True)
+    add_info_table(doc, [("After", change_info.get("afterValue", ""))])
+    add_spacer(doc)
+    add_paragraph(doc, change_info.get("description") or change_info.get("changeTitle", ""))
+    add_spacer(doc)
+
+    add_paragraph(doc, "(3) Reason for change", bold=True)
+    add_paragraph(doc, change_info.get("reason", "[Reason for change]"))
+
+    add_page_break(doc)
+
+    # ===== Assessment results =====
     add_paragraph(
         doc,
-        'The change has been evaluated against each category described in the Health Canada '
-        'Guidance "Types of Changes":'
+        f"The results of reviewing the changes in accordance with {HC_GUIDANCE_TITLE}.",
+        bold=True,
     )
     add_spacer(doc)
 
-    add_h2(doc, "Decision Path")
+    add_paragraph(doc, "- Main Flow chart", bold=True)
     for q in assessment["path"]:
-        if q["answer"] is None:
+        if q["answer"] is None or q["id"] not in HC_MAIN_KEY_TO_CHART_LETTER:
             continue
-        answer_text = "Yes" if q["answer"] else "No"
-        add_bullet_bold(doc, f"{q['id']}. ", f"{q['text']} — {answer_text}.")
+        suffix = ""
+        if q["answer"]:
+            suffix = f" (Go to Flowchart {HC_MAIN_KEY_TO_CHART_LETTER[q['id']]})"
+        _qa_line(doc, q["text_en"], q["answer"], suffix)
 
-    add_h1(doc, "5. Conclusion")
-    add_paragraph(doc, assessment["summary"])
+    last_chart_letter = None
+    for q in assessment["path"]:
+        if q["answer"] is None or q["id"] in HC_MAIN_KEY_TO_CHART_LETTER:
+            continue
+        chart_letter = HC_PREFIX_TO_CHART_LETTER.get(_node_prefix(q["id"]), "?")
+        if chart_letter != last_chart_letter:
+            add_spacer(doc)
+            add_paragraph(doc, f"- Flowchart {chart_letter}", bold=True)
+            last_chart_letter = chart_letter
+        _qa_line(doc, f"{q['id']}: {q['text_en']}", q["answer"])
 
-    add_h1(doc, "6. References")
-    add_bullet(doc, "Health Canada Guidance Document: Guidance on the Interpretation of Significant Change of a Medical Device – Types of Changes")
-    add_bullet(doc, "Medical Devices Regulations (CMDR), Sections 34–35")
-    add_bullet(doc, "ISO 13485 – Medical devices – Quality management systems")
-    add_bullet(doc, f"Original Medical Device Licence No. {product_info.get('hcLicenceNo', 'N/A')}")
-    add_bullet(doc, "Component manufacturer Letter / Certificate of Equivalence dated [YYYY-MM-DD]")
+    add_spacer(doc)
+    if assessment["isSignificant"]:
+        result_label = "Licence Amendment Required"
+        conclusion_label = "Significant Change"
+    else:
+        result_label = "No Amendment Required, Document in Quality Management System"
+        conclusion_label = "Documentation"
+
+    add_paragraph(doc, f"Result: {result_label}.")
+    add_spacer(doc)
+    add_paragraph(doc, f"The change is considered a {conclusion_label}.", bold=True)
 
     return doc
