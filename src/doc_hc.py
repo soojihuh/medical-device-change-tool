@@ -2,9 +2,9 @@
 Health Canada Record of Non-Significant Change document builder (Python).
 """
 from doc_common import (
-    init_document, add_paragraph, add_bullet,
-    add_h1, add_spacer,
-    add_info_table, add_before_after_table, add_two_col_table,
+    init_document, add_paragraph, add_bullet, add_bullet_bold,
+    add_h1, add_h2, add_spacer,
+    add_info_table, add_before_after_table,
     add_cover_page, add_revision_history, add_toc, add_footer,
 )
 
@@ -69,16 +69,12 @@ def build_hc_document(product_info: dict, change_info: dict,
     )
     add_spacer(doc)
 
-    # Build assessment table rows
-    assessment_rows = []
-    for t in assessment["types"]:
-        for item in t["items"]:
-            label = f"{t['name']} – {item['text']}"
-            value = "Yes – significant element present" if item["significant"] else "No – not significant"
-            assessment_rows.append([label, value])
-
-    add_two_col_table(doc, ["Type of Change", "Applicable / Significant?"],
-                      assessment_rows, col_widths_cm=(10.5, 6.5))
+    add_h2(doc, "Decision Path")
+    for q in assessment["path"]:
+        if q["answer"] is None:
+            continue
+        answer_text = "Yes" if q["answer"] else "No"
+        add_bullet_bold(doc, f"{q['id']}. ", f"{q['text']} — {answer_text}.")
 
     add_h1(doc, "5. Conclusion")
     add_paragraph(doc, assessment["summary"])

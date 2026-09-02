@@ -68,6 +68,16 @@ def test():
     print(f"  EU with intended purpose extension: {sig_eu_result['requiredAction']}")
     print("  ✅ PASSED\n")
 
+    # ===== Test 2c: HC significant scenario =====
+    print("Test 2c: HC significant change scenario (control mechanism change)")
+    sig_hc = dict(auto_answers["HC"])
+    sig_hc["G_DESIGN"] = True
+    sig_hc["D1"] = True  # control mechanism / operating principle change
+    sig_hc_result = assess_hc(sig_hc, change_info)
+    assert sig_hc_result["isSignificant"], "Test 2c FAILED: D1=true should be Significant"
+    print(f"  HC with control mechanism change: {sig_hc_result['requiredAction']}")
+    print("  ✅ PASSED\n")
+
     # ===== Test 3: Document generation =====
     print("Test 3: Document generation")
     doc_meta = dict(metadata)

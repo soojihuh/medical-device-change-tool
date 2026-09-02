@@ -20,7 +20,7 @@ from deep_translator import GoogleTranslator
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from assessor_fda import assess_fda, FDA_GRAPH, FDA_MAIN_ITEMS, CHART_ENTRY as FDA_CHART_ENTRY
-from assessor_hc import assess_hc
+from assessor_hc import assess_hc, HC_GRAPH, HC_MAIN_ITEMS, CHART_ENTRY as HC_CHART_ENTRY
 from assessor_eu import assess_eu, EU_GRAPH, EU_MAIN_ITEMS, CHART_ENTRY as EU_CHART_ENTRY
 from doc_fda import build_fda_document
 from doc_hc import build_hc_document
@@ -45,42 +45,6 @@ CATEGORY_MAP = {
 }
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-
-def sequential_yesno(items, prefix):
-    """
-    items: [{"key": str, "text": str, "header": str}, ...]
-    각 문항을 예/아니오로 하나씩 순서대로 보여주고, 답변이 되어야
-    (Yes든 No든) 다음 문항이 나타난다. 아직 답하지 않은 문항 이후는 렌더링하지 않는다.
-    Returns: {key: True|False|None}
-    """
-    answers = {}
-    last_header = None
-    for item in items:
-        header = item.get("header")
-        if header and header != last_header:
-            st.markdown(f"**{header}**")
-            last_header = header
-
-        state_key = f"{prefix}_{item['key']}"
-        choice = st.radio(
-            item["text"],
-            ("예 (Yes)", "아니오 (No)"),
-            index=None,
-            key=state_key,
-            horizontal=True,
-        )
-        answers[item["key"]] = None if choice is None else choice.startswith("예")
-
-        if answers[item["key"]] is None:
-            break
-
-    return answers
-
-
-def progress_caption(answers, required_keys):
-    answered = sum(1 for k in required_keys if answers.get(k) is not None)
-    st.caption(f"진행 상황: {answered} / {len(required_keys)} 문항 답변 완료")
 
 
 def render_graph_node(graph, node_id, prefix, rendered):
@@ -286,32 +250,35 @@ if "FDA" in countries:
     answers_by_country["FDA"] = fda_answers
     completeness_by_country["FDA"] = fda_complete
 
-HC_ITEMS = [
-    {"key": "a1", "header": "(a) Manufacturing Process / Facility / Equipment", "text": "a1. 제조 공정 변경이 있습니까?"},
-    {"key": "a2", "header": "(a) Manufacturing Process / Facility / Equipment", "text": "a2. 제조 시설(facility) 변경이 있습니까?"},
-    {"key": "a3", "header": "(a) Manufacturing Process / Facility / Equipment", "text": "a3. 주요 제조 장비(equipment) 변경이 있습니까?"},
-    {"key": "b1", "header": "(b) Manufacturing Quality Control", "text": "b1. QC 절차 또는 시험 방법 변경이 있습니까?"},
-    {"key": "b2", "header": "(b) Manufacturing Quality Control", "text": "b2. 합격 기준(acceptance criteria) 변경이 있습니까?"},
-    {"key": "c1", "header": "(c) Design / Performance / Material / Energy / Software", "text": "c1. 설계 변경이 있습니까? (단순 명칭 변경은 제외)"},
-    {"key": "c2", "header": "(c) Design / Performance / Material / Energy / Software", "text": "c2. 성능 사양(performance specification) 변경이 있습니까?"},
-    {"key": "c3", "header": "(c) Design / Performance / Material / Energy / Software", "text": "c3. 환자 접촉 재료 변경이 있습니까?"},
-    {"key": "c4", "header": "(c) Design / Performance / Material / Energy / Software", "text": "c4. 에너지원(energy source) 변경이 있습니까?"},
-    {"key": "c5", "header": "(c) Design / Performance / Material / Energy / Software", "text": "c5. 소프트웨어 변경이 있습니까? (사이버보안 패치 등 minor 제외)"},
-    {"key": "c6", "header": "(c) Design / Performance / Material / Energy / Software", "text": "c6. 액세서리 추가/변경이 있습니까?"},
-    {"key": "d1", "header": "(d) Intended Use", "text": "d1. 사용 목적(intended use) 확장 또는 변경이 있습니까?"},
-    {"key": "d2", "header": "(d) Intended Use", "text": "d2. 금기사항(contraindication) 추가/삭제가 있습니까?"},
-    {"key": "d3", "header": "(d) Intended Use", "text": "d3. 환자군(patient population) 변경이 있습니까?"},
-    {"key": "d4", "header": "(d) Intended Use", "text": "d4. 사용 기간(period of use) 변경이 있습니까?"},
-]
-HC_KEYS = [it["key"] for it in HC_ITEMS]
-
 if "HC" in countries:
-    with st.expander("🇨🇦 Health Canada — Guidance on the Interpretation of Significant Change (Types of Changes)", expanded=True):
-        hc_answers = sequential_yesno(HC_ITEMS, prefix="hc")
-        progress_caption(hc_answers, HC_KEYS)
+    with st.expander("🇨🇦 Health Canada — Guidance on how to interpret \"significant change\": Types of changes", expanded=True):
+        hc_answers = {}
+        rendered_hc_nodes = set()
+        charts_complete = True
+
+        for item in HC_MAIN_ITEMS:
+            main_key = item["key"]
+            choice = st.radio(f"{main_key}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"hc_{main_key}")
+            gate = None if choice is None else choice.startswith("예")
+            hc_answers[main_key] = gate
+
+            if gate is None:
+                charts_complete = False
+                continue
+            if gate:
+                entry_node, chart_name = HC_CHART_ENTRY[main_key]
+                st.markdown(f"**{chart_name}**")
+                path, outcome = walk_graph_ui(HC_GRAPH, entry_node, "hc", rendered_hc_nodes)
+                for p in path:
+                    hc_answers[p["id"]] = p["answer"]
+                if outcome is None:
+                    charts_complete = False
+        hc_complete = charts_complete
+
+        st.caption(f"진행 상황: {'답변 완료' if hc_complete else '답변 진행 중'}")
 
     answers_by_country["HC"] = hc_answers
-    completeness_by_country["HC"] = all(hc_answers.get(k) is not None for k in HC_KEYS)
+    completeness_by_country["HC"] = hc_complete
 
 if "EU" in countries:
     with st.expander("🇪🇺 EU MDR — MDCG 2020-3 Rev.1 (Article 120 MDR)", expanded=True):
