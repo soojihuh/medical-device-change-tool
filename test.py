@@ -55,6 +55,19 @@ def test():
     print(f"  FDA with new patient population described: {sig_result['requiredAction']}")
     print("  ✅ PASSED\n")
 
+    # ===== Test 2b: EU significant scenario =====
+    print("Test 2b: EU significant change scenario (extension of intended purpose)")
+    sig_eu = dict(auto_answers["EU"])
+    sig_eu["MAIN_A"] = True  # change of intended purpose
+    sig_eu["A1"] = False     # not a limitation
+    sig_eu["A2"] = True      # extension of intended purpose
+    non_detector_change_info = dict(change_info)
+    non_detector_change_info["componentName"] = "Control Unit"  # avoid the NB detector exception
+    sig_eu_result = assess_eu(sig_eu, non_detector_change_info)
+    assert sig_eu_result["isSignificant"], "Test 2b FAILED: A2=true (extension) should be Significant"
+    print(f"  EU with intended purpose extension: {sig_eu_result['requiredAction']}")
+    print("  ✅ PASSED\n")
+
     # ===== Test 3: Document generation =====
     print("Test 3: Document generation")
     doc_meta = dict(metadata)

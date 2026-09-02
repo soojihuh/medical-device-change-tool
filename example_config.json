@@ -50,11 +50,7 @@
       "d1": false, "d2": false, "d3": false, "d4": false
     },
     "EU": {
-      "A1": false, "A2": false, "A3": false, "A4": false, "A5": false, "A6": false,
-      "B1": false, "B2": false,
-      "C1": false, "C2": false, "C3": false,
-      "D1": false, "D2": false,
-      "E_applicable": false, "E1": false, "E2": false
+      "MAIN0": false, "MAIN_A": false, "MAIN_B": false, "MAIN_C": false, "MAIN_D": false, "MAIN_E": false
     }
   }
 }

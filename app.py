@@ -19,9 +19,9 @@ from deep_translator import GoogleTranslator
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from assessor_fda import assess_fda, walk_fda_graph, FDA_GRAPH, FDA_MAIN_ITEMS, CHART_ENTRY, TERMINALS
+from assessor_fda import assess_fda, FDA_GRAPH, FDA_MAIN_ITEMS, CHART_ENTRY as FDA_CHART_ENTRY
 from assessor_hc import assess_hc
-from assessor_eu import assess_eu
+from assessor_eu import assess_eu, EU_GRAPH, EU_MAIN_ITEMS, CHART_ENTRY as EU_CHART_ENTRY
 from doc_fda import build_fda_document
 from doc_hc import build_hc_document
 from doc_eu import build_eu_document
@@ -83,26 +83,27 @@ def progress_caption(answers, required_keys):
     st.caption(f"진행 상황: {answered} / {len(required_keys)} 문항 답변 완료")
 
 
-def render_fda_node(node_id, prefix, rendered):
-    """FDA 그래프의 한 노드를 렌더링(또는 이미 렌더링됐으면 재사용)한다.
-    같은 노드(예: B5)가 서로 다른 플로우차트에서 공유될 수 있어, 한 실행(run) 안에서
-    위젯이 두 번 생성되지 않도록 rendered(set)로 중복을 막는다."""
+def render_graph_node(graph, node_id, prefix, rendered):
+    """분기형 그래프(FDA_GRAPH/EU_GRAPH)의 한 노드를 렌더링(또는 이미 렌더링됐으면 재사용)한다.
+    같은 노드가 서로 다른 플로우차트에서 공유될 수 있어(예: FDA의 B5, C5->B5 리다이렉트),
+    한 실행(run) 안에서 위젯이 두 번 생성되지 않도록 rendered(set)로 중복을 막는다."""
     state_key = f"{prefix}_{node_id.replace('.', '_')}"
     if state_key in rendered:
         raw = st.session_state.get(state_key)
     else:
-        node = FDA_GRAPH[node_id]
+        node = graph[node_id]
         raw = st.radio(f"{node_id}. {node['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=state_key)
         rendered.add(state_key)
     return None if raw is None else raw.startswith("예")
 
 
-def walk_fda_graph_ui(start_id, prefix, rendered):
+def walk_graph_ui(graph, start_id, prefix, rendered):
+    """그래프의 키에 없는 노드 id는 종결 상태(terminal)로 취급한다."""
     path = []
     node_id = start_id
-    while node_id not in TERMINALS:
-        node = FDA_GRAPH[node_id]
-        ans = render_fda_node(node_id, prefix, rendered)
+    while node_id in graph:
+        node = graph[node_id]
+        ans = render_graph_node(graph, node_id, prefix, rendered)
         path.append({"id": node_id, "text": node["text"], "answer": ans})
         if ans is None:
             return path, None
@@ -239,7 +240,7 @@ countries = st.multiselect(
 st.header("4. 국가별 가이던스 기반 중대성 평가")
 answers_by_country = {}
 
-CHART_LABELS = {
+FDA_CHART_LABELS = {
     "MAIN2": "Flowchart A: Labeling Changes",
     "MAIN3": "Flowchart B: Technology, Engineering, and Performance Changes",
     "MAIN4": "Flowchart C: Materials Changes",
@@ -271,9 +272,9 @@ if "FDA" in countries:
                     charts_complete = False
                     continue
                 if gate:
-                    entry_node, _label = CHART_ENTRY[main_key]
-                    st.markdown(f"**{CHART_LABELS[main_key]}**")
-                    path, outcome = walk_fda_graph_ui(entry_node, "fda", rendered_fda_nodes)
+                    entry_node, _label = FDA_CHART_ENTRY[main_key]
+                    st.markdown(f"**{FDA_CHART_LABELS[main_key]}**")
+                    path, outcome = walk_graph_ui(FDA_GRAPH, entry_node, "fda", rendered_fda_nodes)
                     for p in path:
                         fda_answers[p["id"]] = p["answer"]
                     if outcome is None:
@@ -312,49 +313,43 @@ if "HC" in countries:
     answers_by_country["HC"] = hc_answers
     completeness_by_country["HC"] = all(hc_answers.get(k) is not None for k in HC_KEYS)
 
-EU_BASE_ITEMS = [
-    {"key": "A1", "header": "Chart A: Design / Performance Specification", "text": "A.01. 설계 또는 성능 사양에 변경이 있고 사용 목적에 영향을 줍니까?"},
-    {"key": "A2", "header": "Chart A: Design / Performance Specification", "text": "A.02. 작동 원리(operating principle) 변경이 있습니까?"},
-    {"key": "A3", "header": "Chart A: Design / Performance Specification", "text": "A.03. 에너지원(source of energy) 변경이 있습니까?"},
-    {"key": "A4", "header": "Chart A: Design / Performance Specification", "text": "A.04. 알고리즘 또는 알람 변경이 있습니까?"},
-    {"key": "A5", "header": "Chart A: Design / Performance Specification", "text": "A.05. 사용자 인터페이스 / 인체공학 / 전달 방식 변경이 있습니까?"},
-    {"key": "A6", "header": "Chart A: Design / Performance Specification", "text": "A.06. 성능 또는 기능 변경이 있습니까?"},
-    {"key": "B1", "header": "Chart B: Intended Purpose", "text": "B.01. 사용 목적이 확장 또는 제한되었습니까?"},
-    {"key": "B2", "header": "Chart B: Intended Purpose", "text": "B.02. 적응증 / 금기 / 환자군 / 사용자 변경이 있습니까?"},
-    {"key": "C1", "header": "Chart C: Software", "text": "C.01. OS / 아키텍처 / DB 구조에 신규 또는 주요 변경이 있습니까?"},
-    {"key": "C2", "header": "Chart C: Software", "text": "C.02. 신규 진단/치료 기능, 신규 사용자 상호작용, 의료 목적 변경이 있습니까?"},
-    {"key": "C3", "header": "Chart C: Software", "text": "C.03. 진단 정보의 해석에 영향을 주는 변경이 있습니까?"},
-    {"key": "D1", "header": "Chart D: Substance / Material", "text": "D.01. 인체 조직/체액 접촉 재료/물질 변경이 있습니까?"},
-    {"key": "D2", "header": "Chart D: Substance / Material", "text": "D.02. 핵심 구성품 또는 재료의 공급사(supplier) 변경이 있습니까? (단순 명칭 변경은 제외)"},
-    {"key": "E_applicable", "header": "Chart E: Sterilisation", "text": "E.00. 본 장비가 멸균 의료기기입니까?"},
-]
-EU_STERILE_ITEMS = [
-    {"key": "E1", "header": "Chart E: Sterilisation", "text": "E.01. 멸균 방법 변경이 있습니까?"},
-    {"key": "E2", "header": "Chart E: Sterilisation", "text": "E.02. 포장 / 멸균 배리어 시스템 변경이 있습니까?"},
-]
-
 if "EU" in countries:
     with st.expander("🇪🇺 EU MDR — MDCG 2020-3 Rev.1 (Article 120 MDR)", expanded=True):
-        raw_e_applicable = st.session_state.get("eu_E_applicable")
-        e_applicable_val = None if raw_e_applicable is None else raw_e_applicable.startswith("예")
+        eu_answers = {}
+        eu_complete = False
+        rendered_eu_nodes = set()
 
-        eu_items = list(EU_BASE_ITEMS)
-        eu_required_keys = [it["key"] for it in EU_BASE_ITEMS]
-        if e_applicable_val is True:
-            eu_items += EU_STERILE_ITEMS
-            eu_required_keys += [it["key"] for it in EU_STERILE_ITEMS]
+        st.markdown("**Main Chart**")
+        main0_choice = st.radio(f"MAIN0. {EU_MAIN_ITEMS[0]['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key="eu_MAIN0")
+        eu_answers["MAIN0"] = None if main0_choice is None else main0_choice.startswith("예")
 
-        eu_answers = sequential_yesno(eu_items, prefix="eu")
+        if eu_answers["MAIN0"] is True:
+            eu_complete = True
+        elif eu_answers["MAIN0"] is False:
+            charts_complete = True
+            for item in EU_MAIN_ITEMS[1:]:
+                main_key = item["key"]
+                choice = st.radio(f"{main_key}. {item['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=f"eu_{main_key}")
+                gate = None if choice is None else choice.startswith("예")
+                eu_answers[main_key] = gate
 
-        if e_applicable_val is False:
-            eu_answers["E1"] = False
-            eu_answers["E2"] = False
-            st.caption("→ 비멸균 장비이므로 Chart E는 N/A")
+                if gate is None:
+                    charts_complete = False
+                    continue
+                if gate:
+                    entry_node, chart_name = EU_CHART_ENTRY[main_key]
+                    st.markdown(f"**{chart_name}**")
+                    path, outcome = walk_graph_ui(EU_GRAPH, entry_node, "eu", rendered_eu_nodes)
+                    for p in path:
+                        eu_answers[p["id"]] = p["answer"]
+                    if outcome is None:
+                        charts_complete = False
+            eu_complete = charts_complete
 
-        progress_caption(eu_answers, eu_required_keys)
+        st.caption(f"진행 상황: {'답변 완료' if eu_complete else '답변 진행 중'}")
 
     answers_by_country["EU"] = eu_answers
-    completeness_by_country["EU"] = all(eu_answers.get(k) is not None for k in eu_required_keys)
+    completeness_by_country["EU"] = eu_complete
 
 # ===== 5. Run Assessment =====
 st.header("5. 평가 실행")

@@ -83,19 +83,15 @@ def build_eu_document(product_info: dict, change_info: dict,
         )
         add_spacer(doc)
 
-    for chart in assessment["charts"]:
-        add_h2(doc, chart["name"])
-        if not chart["applicable"]:
-            add_paragraph(doc, "Not applicable to this device.")
+    add_h2(doc, "Decision Path")
+    for q in assessment["path"]:
+        if q["answer"] is None:
             continue
-        if not chart["questions"]:
-            add_paragraph(doc, "Not applicable.")
-            continue
-        for q in chart["questions"]:
-            answer_text = "Yes" if q["answer"] else "No"
-            add_bullet_bold(doc, f"{q['id']}. ", f"{q['text']} — {answer_text}.")
-        outcome = "Significant." if chart["significant"] else "Not significant."
-        add_paragraph(doc, f"Outcome: {outcome}", bold=True)
+        answer_text = "Yes" if q["answer"] else "No"
+        add_bullet_bold(doc, f"{q['id']}. ", f"{q['text']} — {answer_text}.")
+
+    outcome = "Significant change — Notified Body approval required." if assessment["isSignificant"] else "Not significant."
+    add_paragraph(doc, f"Outcome: {outcome}", bold=True)
 
     add_h1(doc, "5. Conclusion of MDCG 2020-3 Assessment")
     add_paragraph(doc, assessment["summary"])
