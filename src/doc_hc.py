@@ -1,118 +1,119 @@
 """
 Health Canada change review document builder (Python).
-Lean format matching the company's actual "Review of changes to Health Canada" template
-(no cover page / TOC / revision history — just the change details and the
-review results, in English for submission).
+Follows the company's actual Health Canada notification-letter template
+(RIOScan_HC_Notification_Letter_2.docx): a formal letter to Health Canada
+notifying a non-significant device change under Section 43(1)(b) of the
+Medical Devices Regulations (SOR/98-282), rather than an internal review memo.
 """
-import re
-
-from doc_common import init_document, add_paragraph, add_spacer, add_page_break, add_info_table
+from doc_common import init_document, add_paragraph, add_spacer, add_generic_table
 
 HC_GUIDANCE_TITLE = 'Guidance on how to interpret "significant change" of a medical device: Types of changes'
-
-# Section order on the Health Canada guidance page, lettered the way the company's own
-# review documents label them (labelling lands on "H" because in-vitro-diagnostic
-# materials — not implemented here — occupies "G").
-HC_PREFIX_TO_CHART_LETTER = {
-    "MFG": "A",
-    "QC": "B",
-    "D": "C",
-    "S": "D",
-    "SW": "E",
-    "M": "F",
-    "L": "H",
-}
-HC_MAIN_KEY_TO_CHART_LETTER = {
-    "G_MFG": "A",
-    "G_QC": "B",
-    "G_DESIGN": "C",
-    "G_STERILE": "D",
-    "G_SW": "E",
-    "G_MATERIAL": "F",
-    "G_LABEL": "H",
-}
-
-
-def _node_prefix(node_id: str) -> str:
-    match = re.match(r"^[A-Za-z]+", node_id)
-    return match.group(0) if match else node_id
-
-
-def _qa_line(doc, text_en: str, answer, suffix: str = ""):
-    add_paragraph(doc, text_en, after_pt=2)
-    arrow = "YES" if answer else "NO"
-    add_paragraph(doc, f"→ {arrow}{suffix}", after_pt=10)
 
 
 def build_hc_document(product_info: dict, change_info: dict,
                       assessment: dict, metadata: dict):
-    """Health Canada 변경 검토 문서 생성 (회사 실제 제출 양식)"""
+    """Health Canada 변경 통지 서한(Notification Letter) 생성 (회사 실제 제출 양식)"""
     doc = init_document()
 
-    # ===== Change details =====
-    add_paragraph(doc, "Change the Existing device for Health Canada", bold=True)
+    model_name = product_info.get("modelName", "[Model Name]")
+    licence_no = product_info.get("hcLicenceNo", "[XXXXX]")
+    manufacturer = product_info.get("manufacturer", "[Manufacturer]")
+    device_class = product_info.get("deviceClass", "[Class]")
+    effective_date = metadata.get("effectiveDate", "[Date, e.g., YYYY-MM-DD]")
+
+    # ===== Letter header =====
+    add_paragraph(doc, effective_date)
+    add_paragraph(doc, "Health Canada", after_pt=0)
+    add_paragraph(doc, "Medical Devices Bureau", after_pt=0)
+    add_paragraph(doc, "Device Licensing Services Division", after_pt=0)
+    add_paragraph(doc, "[Address]")
     add_spacer(doc)
 
-    add_paragraph(doc, "1) Existing device", bold=True)
-    add_paragraph(doc, f"- {product_info.get('hcLicenceNo', 'N/A')} ({product_info.get('modelName', '[Model Name]')})")
-    add_spacer(doc)
-
-    add_paragraph(doc, "2) Change Details", bold=True)
-    add_paragraph(doc, "(1) Existing registration details", bold=True)
-    add_paragraph(doc, change_info.get("componentName", ""), bold=True)
-    add_info_table(doc, [("Before", change_info.get("beforeValue", ""))])
-    add_spacer(doc)
-
-    add_paragraph(doc, "(2) Change request", bold=True)
-    add_paragraph(doc, change_info.get("componentName", ""), bold=True)
-    add_info_table(doc, [("After", change_info.get("afterValue", ""))])
-    add_spacer(doc)
-    add_paragraph(doc, change_info.get("description") or change_info.get("changeTitle", ""))
-    add_spacer(doc)
-
-    add_paragraph(doc, "(3) Reason for change", bold=True)
-    add_paragraph(doc, change_info.get("reason", "[Reason for change]"))
-
-    add_page_break(doc)
-
-    # ===== Assessment results =====
     add_paragraph(
         doc,
-        f"The results of reviewing the changes in accordance with {HC_GUIDANCE_TITLE}.",
+        f"Re: Notification of Non-Significant Device Change — {model_name} "
+        f"(Medical Device Licence No. {licence_no})",
         bold=True,
+    )
+    add_paragraph(doc, "To Whom It May Concern:")
+
+    add_paragraph(
+        doc,
+        f"Pursuant to Section 43(1)(b) of the Medical Devices Regulations (SOR/98-282), "
+        f"{manufacturer} hereby notifies Health Canada of a change made to the "
+        f"above-referenced licensed medical device, {model_name} (a {device_class} medical device), "
+        f"as part of our next annual licence renewal filing.",
+    )
+
+    # ===== Description of Change =====
+    change_desc = change_info.get("description") or change_info.get("changeTitle", "")
+    reason = change_info.get("reason", "")
+    desc_text = f"{change_desc} {reason}".strip()
+    add_paragraph(doc, f"Description of Change: {desc_text}")
+
+    # ===== Basis for Determination =====
+    add_paragraph(
+        doc,
+        f"Basis for Determination: {model_name} is licensed as a {device_class} medical device. "
+        f"This change was assessed in accordance with Health Canada's guidance document, "
+        f"{HC_GUIDANCE_TITLE}. Section 34 of the Regulations sets out the categories of changes, "
+        f"under paragraphs (a) through (f), that require submission of a licence amendment application; "
+        f"this change does not fall within any of these categories. Accordingly, a licence amendment "
+        f"is not required for this change.",
+    )
+
+    add_paragraph(
+        doc,
+        f"This change has been evaluated and documented within {manufacturer}'s quality management "
+        f"system (ISO 13485) under our design change control procedures, including verification and/or "
+        f"validation activities confirming that the safety and performance of the device are unaffected "
+        f"by this change.",
+    )
+
+    add_paragraph(
+        doc,
+        "In accordance with Health Canada's guidance recommending that non-significant changes be "
+        "itemized in a table with a brief rationale at the time of annual licence renewal, the details "
+        "of this change are provided below:",
     )
     add_spacer(doc)
 
-    add_paragraph(doc, "- Main Flow chart", bold=True)
-    for q in assessment["path"]:
-        if q["answer"] is None or q["id"] not in HC_MAIN_KEY_TO_CHART_LETTER:
-            continue
-        suffix = ""
-        if q["answer"]:
-            suffix = f" (Go to Flowchart {HC_MAIN_KEY_TO_CHART_LETTER[q['id']]})"
-        _qa_line(doc, q["text_en"], q["answer"], suffix)
+    # ===== Change details table =====
+    component = change_info.get("componentName", "")
+    before_v = change_info.get("beforeValue", "")
+    after_v = change_info.get("afterValue", "")
+    device_change_cell = f"{model_name} — {component}, {before_v} → {after_v}" if component else model_name
 
-    last_chart_letter = None
-    for q in assessment["path"]:
-        if q["answer"] is None or q["id"] in HC_MAIN_KEY_TO_CHART_LETTER:
-            continue
-        chart_letter = HC_PREFIX_TO_CHART_LETTER.get(_node_prefix(q["id"]), "?")
-        if chart_letter != last_chart_letter:
-            add_spacer(doc)
-            add_paragraph(doc, f"- Flowchart {chart_letter}", bold=True)
-            last_chart_letter = chart_letter
-        _qa_line(doc, f"{q['id']}: {q['text_en']}", q["answer"])
+    rationale = (
+        f"{reason} " if reason else ""
+    ) + (
+        "Assessed against Health Canada's guidance on interpreting \"significant change\" "
+        "(manufacturing process, quality control, design, sterilization, software, materials, and "
+        "labelling); the change does not meet the criteria for a significant change under CMDR Section 34."
+    )
+    doc_refs = [
+        ref for ref in [
+            change_info.get("designSpecRef"),
+            change_info.get("riskAssessmentRef"),
+            change_info.get("vvSummaryRef"),
+        ] if ref
+    ]
+    supporting_docs = "; ".join(doc_refs) if doc_refs else "[Attachments — spec comparison, test reports, risk assessment, as applicable]"
 
+    add_generic_table(
+        doc,
+        ["Date of Change", "Device / Change", "Rationale (Why Not Significant)", "Supporting Documentation"],
+        [[effective_date, device_change_cell, rationale, supporting_docs]],
+        col_widths_cm=[2.7, 4.3, 6.5, 2.5],
+    )
     add_spacer(doc)
-    if assessment["isSignificant"]:
-        result_label = "Licence Amendment Required"
-        conclusion_label = "Significant Change"
-    else:
-        result_label = "No Amendment Required, Document in Quality Management System"
-        conclusion_label = "Documentation"
 
-    add_paragraph(doc, f"Result: {result_label}.")
-    add_spacer(doc)
-    add_paragraph(doc, f"The change is considered a {conclusion_label}.", bold=True)
+    # ===== Closing =====
+    add_paragraph(doc, "Should you require any additional information regarding this change, please do not hesitate to contact the undersigned.")
+    add_paragraph(doc, "Sincerely,")
+    add_paragraph(doc, metadata.get("preparedBy") or "[Name]", after_pt=0)
+    add_paragraph(doc, "[Title]", after_pt=0)
+    add_paragraph(doc, f"Regulatory Affairs, {manufacturer}", after_pt=0)
+    add_paragraph(doc, "[Email] / [Phone]")
 
     return doc

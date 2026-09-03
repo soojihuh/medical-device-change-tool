@@ -31,6 +31,7 @@ st.set_page_config(page_title="의료기기 변경 평가 도구", page_icon="�
 
 st.title("🏥 의료기기 변경 평가 및 인허가 문서 자동 생성 도구")
 st.caption("FDA / Health Canada / EU MDR 가이던스 기반 변경 중대성 평가")
+st.caption("🔧 Build: 2026-09-03-HC-Letter-v1 (이 표시가 안 보이면 예전 페이지입니다 — 새로고침 해주세요)")
 
 CATEGORY_MAP = {
     "Labeling / Nomenclature (라벨링 / 명칭)": "labeling",
@@ -383,20 +384,34 @@ if "assessment_results" in st.session_state:
 
         needs_metadata = any(r["country"] == "EU" for r in non_sig)
 
-        if needs_metadata:
-            with st.form("doc_meta_form"):
+        with st.form("doc_meta_form"):
+            if needs_metadata:
                 doc_number_prefix = st.text_input("문서 번호 prefix (e.g., LTF-2026)", value="DOC-2026")
                 revision_no = st.text_input("Revision No.", value="00")
-                effective_date = st.text_input("Effective Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"))
-                prepared_by = st.text_input("작성자 (Prepared by)", value="[Name]")
-                reviewed_by = st.text_input("검토자 (Reviewed by)", value="[Name]")
-                approved_by = st.text_input("승인자 (Approved by)", value="[Name]")
-                generate_clicked = st.form_submit_button("📄 문서 생성")
-        else:
-            st.caption("FDA/HC 문서는 회사 실제 제출 양식(표지·개정이력 없음)으로 생성되어 별도 정보 입력이 필요 없습니다.")
-            doc_number_prefix, revision_no, effective_date = "DOC-2026", "00", datetime.now().strftime("%Y-%m-%d")
-            prepared_by = reviewed_by = approved_by = ""
-            generate_clicked = st.button("📄 문서 생성")
+            else:
+                st.caption("FDA/HC 문서는 회사 실제 제출 양식(표지·개정이력 없음)으로 생성되어 문서번호/개정번호 입력이 필요 없습니다.")
+                doc_number_prefix, revision_no = "DOC-2026", "00"
+
+            effective_date = st.text_input("Date of Assessment / Effective Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"))
+
+            st.markdown("**참고 문서 (Supporting Documents)** — FDA 문서의 'Supporting Documents' 항목에 표시됩니다")
+            design_spec_ref = st.text_input("Design Specifications 문서번호", value="")
+            risk_assessment_ref = st.text_input("Risk-Based Assessment 문서번호", value="")
+            vv_summary_ref = st.text_input("Verification and Validation Summary 문서번호", value="")
+
+            st.markdown("**서명 (Signatures)**")
+            sc1, sc2, sc3 = st.columns(3)
+            with sc1:
+                prepared_by = st.text_input("작성자 (Prepared by)", value="")
+                prepared_date = st.text_input("작성일 (Prepared Date)", value=datetime.now().strftime("%Y-%m-%d"))
+            with sc2:
+                reviewed_by = st.text_input("검토자 (Reviewed by)", value="")
+                reviewed_date = st.text_input("검토일 (Reviewed Date)", value="")
+            with sc3:
+                approved_by = st.text_input("승인자 (Approved by)", value="")
+                approved_date = st.text_input("승인일 (Approved Date)", value="")
+
+            generate_clicked = st.form_submit_button("📄 문서 생성")
 
         if generate_clicked:
             metadata = {
@@ -406,9 +421,15 @@ if "assessment_results" in st.session_state:
                 "preparedBy": prepared_by,
                 "reviewedBy": reviewed_by,
                 "approvedBy": approved_by,
+                "preparedDate": prepared_date,
+                "reviewedDate": reviewed_date,
+                "approvedDate": approved_date,
             }
             saved_product_info = st.session_state["product_info"]
-            saved_change_info = st.session_state["change_info"]
+            saved_change_info = dict(st.session_state["change_info"])
+            saved_change_info["designSpecRef"] = design_spec_ref
+            saved_change_info["riskAssessmentRef"] = risk_assessment_ref
+            saved_change_info["vvSummaryRef"] = vv_summary_ref
             model_name_safe = (saved_product_info.get("modelName") or "Device").replace(" ", "_")
 
             generated_files = {}
@@ -431,6 +452,11 @@ if "assessment_results" in st.session_state:
                 buf = BytesIO()
                 doc.save(buf)
                 generated_files[filename] = buf.getvalue()
+
+                output_dir = Path(__file__).parent / "output"
+                output_dir.mkdir(exist_ok=True)
+                with open(output_dir / filename, "wb") as f:
+                    f.write(buf.getvalue())
 
             st.session_state["generated_files"] = generated_files
 

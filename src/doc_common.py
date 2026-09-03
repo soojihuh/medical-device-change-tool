@@ -338,6 +338,97 @@ def add_before_after_table(doc, rows: list):
     return table
 
 
+def add_labeled_paragraph(doc, label: str, value: str, after_pt: int = 10, bold_label: bool = True):
+    """'Label: value' 한 단락 (라벨만 굵게) — FDA Appendix B 예시 서식용"""
+    p = doc.add_paragraph()
+    run_l = p.add_run(f"{label}: ")
+    run_l.font.name = "Arial"
+    run_l.font.size = Pt(11)
+    run_l.bold = bold_label
+    run_v = p.add_run(str(value or ""))
+    run_v.font.name = "Arial"
+    run_v.font.size = Pt(11)
+    p.paragraph_format.space_after = Pt(after_pt)
+    return p
+
+
+def add_generic_table(doc, headers: list, rows: list, col_widths_cm=None):
+    """임의 개수의 열을 가진 헤더 표 (네이비 헤더 + 흰 글씨)"""
+    n_cols = len(headers)
+    if col_widths_cm is None:
+        col_widths_cm = [16.0 / n_cols] * n_cols
+
+    table = doc.add_table(rows=len(rows) + 1, cols=n_cols)
+    table.autofit = False
+    for j, w in enumerate(col_widths_cm):
+        table.columns[j].width = Cm(w)
+
+    for j, h in enumerate(headers):
+        cell = table.cell(0, j)
+        cell.width = Cm(col_widths_cm[j])
+        set_cell_shading(cell, NAVY_HEX)
+        set_cell_borders(cell)
+        set_cell_margins(cell)
+        p = cell.paragraphs[0]
+        run = p.add_run(h)
+        run.font.name = "Arial"
+        run.font.size = Pt(10)
+        run.bold = True
+        run.font.color.rgb = WHITE
+
+    for i, row in enumerate(rows, start=1):
+        for j, val in enumerate(row):
+            cell = table.cell(i, j)
+            cell.width = Cm(col_widths_cm[j])
+            set_cell_borders(cell)
+            set_cell_margins(cell)
+            p = cell.paragraphs[0]
+            run = p.add_run(str(val or ""))
+            run.font.name = "Arial"
+            run.font.size = Pt(10)
+
+    return table
+
+
+def add_signature_table(doc, rows: list, col_widths_cm=(4.0, 7.5, 4.5)):
+    """Role / Name / Date 3열 서명란 표"""
+    table = doc.add_table(rows=len(rows) + 1, cols=3)
+    table.autofit = False
+    for j, w in enumerate(col_widths_cm):
+        table.columns[j].width = Cm(w)
+
+    headers = ["Role", "Name", "Date"]
+    for j, h in enumerate(headers):
+        cell = table.cell(0, j)
+        cell.width = Cm(col_widths_cm[j])
+        set_cell_shading(cell, NAVY_HEX)
+        set_cell_borders(cell)
+        set_cell_margins(cell)
+        p = cell.paragraphs[0]
+        run = p.add_run(h)
+        run.font.name = "Arial"
+        run.font.size = Pt(11)
+        run.bold = True
+        run.font.color.rgb = WHITE
+
+    for i, (role, name, date) in enumerate(rows, start=1):
+        for j, val in enumerate((role, name, date)):
+            cell = table.cell(i, j)
+            cell.width = Cm(col_widths_cm[j])
+            if j == 0:
+                set_cell_shading(cell, GRAY_HEADER)
+            set_cell_borders(cell)
+            set_cell_margins(cell, top=200, bottom=200, left=140, right=140)
+            p = cell.paragraphs[0]
+            run = p.add_run(str(val or ""))
+            run.font.name = "Arial"
+            run.font.size = Pt(11)
+            if j == 0:
+                run.bold = True
+
+    return table
+
+
 def add_two_col_table(doc, header: list, rows: list, col_widths_cm=(10.5, 6.5)):
     """범용 2열 헤더 표"""
     table = doc.add_table(rows=len(rows) + 1, cols=2)
