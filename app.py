@@ -383,6 +383,7 @@ if "assessment_results" in st.session_state:
         st.info(f"{len(non_sig)}개 국가({', '.join(r['country'] for r in non_sig)})에서 중대하지 않은 변경으로 판정되어 문서를 생성할 수 있습니다.")
 
         needs_metadata = any(r["country"] == "EU" for r in non_sig)
+        needs_fda_extras = any(r["country"] == "FDA" for r in non_sig)
 
         with st.form("doc_meta_form"):
             if needs_metadata:
@@ -394,22 +395,27 @@ if "assessment_results" in st.session_state:
 
             effective_date = st.text_input("Date of Assessment / Effective Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"))
 
-            st.markdown("**참고 문서 (Supporting Documents)** — FDA 문서의 'Supporting Documents' 항목에 표시됩니다")
-            design_spec_ref = st.text_input("Design Specifications 문서번호", value="")
-            risk_assessment_ref = st.text_input("Risk-Based Assessment 문서번호", value="")
-            vv_summary_ref = st.text_input("Verification and Validation Summary 문서번호", value="")
+            if needs_fda_extras:
+                st.markdown("**참고 문서 (Supporting Documents)** — FDA 문서의 'Supporting Documents' 항목에 표시됩니다")
+                design_spec_ref = st.text_input("Design Specifications 문서번호", value="")
+                risk_assessment_ref = st.text_input("Risk-Based Assessment 문서번호", value="")
+                vv_summary_ref = st.text_input("Verification and Validation Summary 문서번호", value="")
 
-            st.markdown("**서명 (Signatures)**")
-            sc1, sc2, sc3 = st.columns(3)
-            with sc1:
-                prepared_by = st.text_input("작성자 (Prepared by)", value="")
-                prepared_date = st.text_input("작성일 (Prepared Date)", value=datetime.now().strftime("%Y-%m-%d"))
-            with sc2:
-                reviewed_by = st.text_input("검토자 (Reviewed by)", value="")
-                reviewed_date = st.text_input("검토일 (Reviewed Date)", value="")
-            with sc3:
-                approved_by = st.text_input("승인자 (Approved by)", value="")
-                approved_date = st.text_input("승인일 (Approved Date)", value="")
+                st.markdown("**서명 (Signatures)**")
+                sc1, sc2, sc3 = st.columns(3)
+                with sc1:
+                    prepared_by = st.text_input("작성자 (Prepared by)", value="")
+                    prepared_date = st.text_input("작성일 (Prepared Date)", value=datetime.now().strftime("%Y-%m-%d"))
+                with sc2:
+                    reviewed_by = st.text_input("검토자 (Reviewed by)", value="")
+                    reviewed_date = st.text_input("검토일 (Reviewed Date)", value="")
+                with sc3:
+                    approved_by = st.text_input("승인자 (Approved by)", value="")
+                    approved_date = st.text_input("승인일 (Approved Date)", value="")
+            else:
+                design_spec_ref = risk_assessment_ref = vv_summary_ref = ""
+                prepared_by = reviewed_by = approved_by = ""
+                prepared_date = reviewed_date = approved_date = ""
 
             generate_clicked = st.form_submit_button("📄 문서 생성")
 
