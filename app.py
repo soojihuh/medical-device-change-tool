@@ -388,7 +388,14 @@ if "assessment_results" in st.session_state:
     st.subheader("평가 결과 요약")
     for r in results:
         result = r["result"]
-        if result.get("manualReviewRequired"):
+        if r["country"] == "KR":
+            # KR은 결과가 6가지(경미/변경허가 등 다양한 조합)라 "Significant" 이분법 대신
+            # 판단 근거 요약을 그대로 보여준다.
+            if result["isSignificant"]:
+                st.error(f"⚠️ **KR** — {result['summary']}")
+            else:
+                st.success(f"✅ **KR** — {result['summary']}")
+        elif result.get("manualReviewRequired"):
             st.warning(f"🔍 **{r['country']}** — 수동 검토 필요 → {result['requiredAction']}")
         elif result["isSignificant"]:
             st.error(f"⚠️ **{r['country']}** — Significant (중대한 변경) → {result['requiredAction']}")
