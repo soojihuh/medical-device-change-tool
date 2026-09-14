@@ -101,7 +101,11 @@ st.header("1. 제품 정보")
 c1, c2 = st.columns(2)
 with c1:
     model_name = st.text_input("모델명 (Model Name)")
-    device_class = st.text_input("의료기기 등급", value="Class II / IIb")
+    device_class = st.selectbox(
+        "의료기기 등급",
+        ["Class I", "Class II", "Class IIa", "Class IIb", "Class III"],
+        index=3,
+    )
     manufacturer = st.text_input("제조사 (Legal Manufacturer)", value="Ray Co., Ltd.")
     manufacturer_address = st.text_input(
         "제조사 주소",
