@@ -51,16 +51,21 @@ DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 
 
 def render_graph_node(graph, node_id, prefix, rendered):
-    """분기형 그래프(FDA_GRAPH/EU_GRAPH)의 한 노드를 렌더링(또는 이미 렌더링됐으면 재사용)한다.
+    """분기형 그래프(FDA_GRAPH/EU_GRAPH/KR_GRAPH)의 한 노드를 렌더링(또는 이미 렌더링됐으면 재사용)한다.
     같은 노드가 서로 다른 플로우차트에서 공유될 수 있어(예: FDA의 B5, C5->B5 리다이렉트),
-    한 실행(run) 안에서 위젯이 두 번 생성되지 않도록 rendered(set)로 중복을 막는다."""
+    한 실행(run) 안에서 위젯이 두 번 생성되지 않도록 rendered(set)로 중복을 막는다.
+    노드에 "note"가 있으면(예: KR의 규정 원문 참고) 질문 아래에 펼치기로 보여준다."""
+    node = graph[node_id]
     state_key = f"{prefix}_{node_id.replace('.', '_')}"
     if state_key in rendered:
         raw = st.session_state.get(state_key)
     else:
-        node = graph[node_id]
         raw = st.radio(f"{node_id}. {node['text']}", ("예 (Yes)", "아니오 (No)"), index=None, key=state_key)
         rendered.add(state_key)
+    note = node.get("note")
+    if note:
+        with st.expander("📖 관련 규정 참고"):
+            st.markdown(note)
     return None if raw is None else raw.startswith("예")
 
 
