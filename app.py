@@ -401,8 +401,10 @@ if "assessment_results" in st.session_state:
             st.error(f"⚠️ **{r['country']}** — Significant (중대한 변경) → {result['requiredAction']}")
         else:
             st.success(f"✅ **{r['country']}** — Not Significant (중대하지 않은 변경) → {result['requiredAction']}")
-        with st.expander(f"{r['country']} 상세 내역"):
-            st.write(result["summary"])
+        if r["country"] != "KR":
+            # KR은 위 결과 줄에 이미 판단 근거(summary)를 그대로 보여주므로 상세 내역을 중복 표시하지 않는다.
+            with st.expander(f"{r['country']} 상세 내역"):
+                st.write(result["summary"])
 
     non_sig = [r for r in results if not r["result"]["isSignificant"]]
 
