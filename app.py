@@ -22,16 +22,18 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from assessor_fda import assess_fda, FDA_GRAPH, FDA_MAIN_ITEMS, CHART_ENTRY as FDA_CHART_ENTRY
 from assessor_hc import assess_hc, HC_GRAPH, HC_MAIN_ITEMS, CHART_ENTRY as HC_CHART_ENTRY
 from assessor_eu import assess_eu, EU_GRAPH, EU_MAIN_ITEMS, CHART_ENTRY as EU_CHART_ENTRY
+from assessor_kr import assess_kr, KR_GRAPH, START as KR_START
 from doc_fda import build_fda_document
 from doc_hc import build_hc_document
 from doc_eu import build_eu_document
+from doc_kr import build_kr_document
 
 
 st.set_page_config(page_title="의료기기 변경 평가 도구", page_icon="🏥", layout="wide")
 
 st.title("🏥 의료기기 변경 평가 및 인허가 문서 자동 생성 도구")
-st.caption("FDA / Health Canada / EU MDR 가이던스 기반 변경 중대성 평가")
-st.caption("🔧 Build: 2026-09-03-HC-Letter-v1 (이 표시가 안 보이면 예전 페이지입니다 — 새로고침 해주세요)")
+st.caption("FDA / Health Canada / EU MDR / 식약처(MFDS) 가이던스 기반 변경 중대성 평가")
+st.caption("🔧 Build: 2026-09-14-KR-v1 (이 표시가 안 보이면 예전 페이지입니다 — 새로고침 해주세요)")
 
 CATEGORY_MAP = {
     "Labeling / Nomenclature (라벨링 / 명칭)": "labeling",
@@ -108,6 +110,7 @@ with c2:
     eu_cert_number = st.text_input("EU NB Certificate Number", value="N/A")
     eu_notified_body = st.text_input("EU Notified Body", value="N/A")
     eu_basic_udi_di = st.text_input("EU Basic UDI-DI", value="N/A")
+    kr_permit_no = st.text_input("국내 허가·인증·신고번호", value="N/A")
 
 product_info = {
     "modelName": model_name,
@@ -121,6 +124,7 @@ product_info = {
     "euCertNumber": eu_cert_number,
     "euNotifiedBody": eu_notified_body,
     "euBasicUDIDI": eu_basic_udi_di,
+    "krPermitNo": kr_permit_no,
 }
 
 # ===== 2. Change Info =====
@@ -197,8 +201,8 @@ else:
 st.header("3. 평가 대상 국가 선택")
 countries = st.multiselect(
     "평가할 국가/지역을 선택하세요 (복수 선택 가능)",
-    ["FDA", "HC", "EU"],
-    default=["FDA", "HC", "EU"],
+    ["FDA", "HC", "EU", "KR"],
+    default=["FDA", "HC", "EU", "KR"],
 )
 
 # ===== 4. Per-country Questionnaires =====
@@ -332,6 +336,22 @@ if "EU" in countries:
     answers_by_country["EU"] = eu_answers
     completeness_by_country["EU"] = eu_complete
 
+if "KR" in countries:
+    with st.expander("🇰🇷 식약처(MFDS) — 의료기기 허가·신고·심사 등에 관한 규정 [별표 3]/[별표 4]", expanded=True):
+        st.caption(
+            "[별표 3] 경미한 변경사항(140개 항목, 제19조 관련) 목록을 참고하여 "
+            "\"[별표 3]에 해당하는 항목입니까?\" 문항에 답해주세요."
+        )
+        rendered_kr_nodes = set()
+        kr_path, kr_outcome = walk_graph_ui(KR_GRAPH, KR_START, "kr", rendered_kr_nodes)
+        kr_answers = {p["id"]: p["answer"] for p in kr_path}
+        kr_complete = kr_outcome is not None
+
+        st.caption(f"진행 상황: {'답변 완료' if kr_complete else '답변 진행 중'}")
+
+    answers_by_country["KR"] = kr_answers
+    completeness_by_country["KR"] = kr_complete
+
 # ===== 5. Run Assessment =====
 st.header("5. 평가 실행")
 
@@ -353,6 +373,8 @@ if st.button("▶ 평가 실행", type="primary", disabled=not all_ready):
             result = assess_hc(answers, change_info)
         elif country == "EU":
             result = assess_eu(answers, change_info)
+        elif country == "KR":
+            result = assess_kr(answers, change_info)
         results.append({"country": country, "answers": answers, "result": result})
 
     st.session_state["assessment_results"] = results
@@ -390,7 +412,7 @@ if "assessment_results" in st.session_state:
                 doc_number_prefix = st.text_input("문서 번호 prefix (e.g., LTF-2026)", value="DOC-2026")
                 revision_no = st.text_input("Revision No.", value="00")
             else:
-                st.caption("FDA/HC 문서는 회사 실제 제출 양식(표지·개정이력 없음)으로 생성되어 문서번호/개정번호 입력이 필요 없습니다.")
+                st.caption("FDA/HC/KR 문서는 회사 실제 제출 양식(표지·개정이력 없음)으로 생성되어 문서번호/개정번호 입력이 필요 없습니다.")
                 doc_number_prefix, revision_no = "DOC-2026", "00"
 
             effective_date = st.text_input("Date of Assessment / Effective Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"))
@@ -454,6 +476,9 @@ if "assessment_results" in st.session_state:
                 elif country == "EU":
                     doc = build_eu_document(saved_product_info, saved_change_info, result, doc_meta)
                     filename = f"EU_non-signification_{model_name_safe}.docx"
+                elif country == "KR":
+                    doc = build_kr_document(saved_product_info, saved_change_info, result, doc_meta)
+                    filename = f"KR_non-signification_{model_name_safe}.docx"
 
                 buf = BytesIO()
                 doc.save(buf)
@@ -467,7 +492,7 @@ if "assessment_results" in st.session_state:
             st.session_state["generated_files"] = generated_files
 
     else:
-        st.warning("모든 선택 국가에서 중대한 변경으로 판정되어, 본 도구는 문서를 생성하지 않습니다. 별도 인허가 절차(신규 510(k) / Licence Amendment / NB Notification)가 필요합니다.")
+        st.warning("모든 선택 국가에서 중대한 변경으로 판정되어, 본 도구는 문서를 생성하지 않습니다. 별도 인허가 절차(신규 510(k) / Licence Amendment / NB Notification / 변경허가·인증)가 필요합니다.")
 
 if "generated_files" in st.session_state and st.session_state["generated_files"]:
     st.subheader("생성된 문서 다운로드")
