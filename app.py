@@ -30,6 +30,7 @@ from doc_kr import build_kr_document
 from template_engine import (
     COUNTRIES, placeholders_for, has_custom_template, template_path, save_custom_template,
     delete_custom_template, build_context, render_docx, find_placeholders,
+    sample_context, docx_to_preview_html,
 )
 from default_templates import default_template_bytes
 
@@ -98,6 +99,12 @@ if page == "🗂 국가별 양식 관리":
                             "알 수 없는 자리표시자가 있어 치환되지 않고 그대로 남습니다: "
                             + ", ".join(f"{{{{{u}}}}}" for u in unknown)
                         )
+                    st.markdown("**📑 미리보기** — 샘플 데이터로 채운 모습입니다 (Word와 100% 동일하지는 않으며, 노란색 표시는 치환되지 않은 자리표시자)")
+                    try:
+                        preview_doc = render_docx(data, sample_context(c))
+                        st.markdown(docx_to_preview_html(preview_doc), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"미리보기를 만들 수 없습니다: {e}")
                     if st.button("이 양식으로 적용", key=f"apply_{c}", type="primary"):
                         save_custom_template(c, data)
                         st.success("적용했습니다. 다음 문서 생성부터 이 양식이 사용됩니다.")
@@ -107,6 +114,10 @@ if page == "🗂 국가별 양식 관리":
                 delete_custom_template(c)
                 st.success("기본 양식으로 되돌렸습니다.")
                 st.rerun()
+
+            with st.expander("현재 사용 중인 양식 미리보기 (샘플 데이터)"):
+                current_bytes = template_path(c).read_bytes() if custom else default_template_bytes(c)
+                st.markdown(docx_to_preview_html(render_docx(current_bytes, sample_context(c))), unsafe_allow_html=True)
 
             with st.expander("사용할 수 있는 자리표시자 목록"):
                 for key, desc in placeholders_for(c).items():

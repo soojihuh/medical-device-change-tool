@@ -189,6 +189,143 @@ def render_docx(template_bytes: bytes, context: dict):
     return doc
 
 
+def sample_context(country: str) -> dict:
+    """미리보기용 샘플 데이터로 채운 치환값"""
+    product_info = {
+        "modelName": "RIOScan", "deviceClass": "Class IIb", "manufacturer": "Ray Co., Ltd.",
+        "manufacturerAddress": "Yongin-si, Gyeonggi-do, Republic of Korea", "fdaK510": "K123456",
+        "fdaProductCode": "MQB", "fdaRegulationNumber": "892.1650", "hcLicenceNo": "12345",
+        "euCertNumber": "NB-0123", "euNotifiedBody": "Example NB", "euBasicUDIDI": "BUDI-0001",
+        "krPermitNo": "제허 00-000호",
+    }
+    change_info = {
+        "componentName": "AC/DC power adapter", "changeTitle": "Power adapter model change",
+        "beforeValue": "Model A", "afterValue": "Model B", "reason": "Original supplier discontinued Model A.",
+        "description": "The AC/DC power adapter was changed from Model A to Model B.",
+        "designSpecRef": "DS-0001", "riskAssessmentRef": "RA-0001", "vvSummaryRef": "VV-0001",
+    }
+    assessment = {
+        "guidance": "Sample guidance title", "isSignificant": False, "requiredAction": "Not significant (sample)",
+        "summary": "Sample conclusion: the change is not significant.",
+        "path": [
+            {"id": "Q1", "text": "샘플 질문 1", "text_en": "Sample question 1", "answer": False},
+            {"id": "Q2", "text": "샘플 질문 2", "text_en": "Sample question 2", "answer": False},
+        ],
+    }
+    metadata = {
+        "effectiveDate": "2026-01-01", "docNumber": "DOC-2026-SAMPLE", "revisionNo": "00",
+        "preparedBy": "홍길동", "reviewedBy": "김검토", "approvedBy": "이승인",
+        "preparedDate": "2026-01-01", "reviewedDate": "2026-01-02", "approvedDate": "2026-01-03",
+    }
+    return build_context(country, product_info, change_info, assessment, metadata)
+
+
+def _esc(text: str) -> str:
+    import html
+    s = html.escape(text).replace("\n", "<br>")
+    # 치환되지 않고 남은 자리표시자는 노란색으로 표시
+    return re.sub(r"\{\{(.+?)\}\}", r'<mark style="background:#ffe08a;color:#000">{{\1}}</mark>', s)
+
+
+def _run_html(run) -> str:
+    text = run.text
+    if not text:
+        return ""
+    out = _esc(text)
+    style = []
+    try:
+        if run.font.color is not None and run.font.color.rgb is not None:
+            style.append(f"color:#{run.font.color.rgb}")
+    except Exception:
+        pass
+    try:
+        if run.font.size:
+            style.append(f"font-size:{run.font.size.pt}pt")
+    except Exception:
+        pass
+    if style:
+        out = f'<span style="{";".join(style)}">{out}</span>'
+    if run.bold:
+        out = f"<b>{out}</b>"
+    if run.italic:
+        out = f"<i>{out}</i>"
+    return out
+
+
+def _para_html(paragraph) -> str:
+    if paragraph._p.xpath('.//w:br[@w:type="page"]'):
+        return '<div style="border-top:2px dashed #999;margin:18px 0;color:#999;font-size:11px">— 페이지 나눔 —</div>'
+    inner = "".join(_run_html(r) for r in paragraph.runs)
+    style_name = (paragraph.style.name if paragraph.style is not None else "") or ""
+    a = paragraph.alignment
+    align = {1: "center", 2: "right"}.get(int(a) if a is not None else 0, "left")
+    if not inner.strip():
+        return '<div style="height:10px"></div>'
+    if style_name.startswith("Heading 1"):
+        return f'<h2 style="margin:14px 0 6px;text-align:{align}">{inner}</h2>'
+    if style_name.startswith("Heading"):
+        return f'<h3 style="margin:10px 0 4px;text-align:{align}">{inner}</h3>'
+    prefix = "• " if "List" in style_name else ""
+    return f'<p style="margin:0 0 8px;text-align:{align}">{prefix}{inner}</p>'
+
+
+def _cell_fill(cell) -> str:
+    try:
+        shd = cell._tc.xpath("./w:tcPr/w:shd")
+        if shd:
+            fill = shd[0].get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fill")
+            if fill and fill.lower() not in ("auto", "ffffff"):
+                return f"background:#{fill};"
+    except Exception:
+        pass
+    return ""
+
+
+def _table_html(table) -> str:
+    rows = []
+    for row in table.rows:
+        cells = []
+        seen = set()
+        for cell in row.cells:
+            if id(cell._tc) in seen:
+                continue
+            seen.add(id(cell._tc))
+            body = _container_html(cell)
+            cells.append(f'<td style="border:1px solid #888;padding:6px 8px;vertical-align:top;{_cell_fill(cell)}">{body}</td>')
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+    return '<table style="border-collapse:collapse;width:100%;margin:6px 0 12px">' + "".join(rows) + "</table>"
+
+
+def _container_html(container) -> str:
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+    parts = []
+    for child in container._element.iterchildren():
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            parts.append(_para_html(Paragraph(child, container)))
+        elif tag == "tbl":
+            parts.append(_table_html(Table(child, container)))
+    return "".join(parts)
+
+
+def docx_to_preview_html(doc) -> str:
+    """python-docx Document를 종이 문서 모양의 HTML로 변환 (미리보기용, Word와 100% 동일하지는 않음)"""
+    body = _container_html(doc._body)
+    footer_texts = []
+    for section in doc.sections:
+        t = " ".join(p.text for p in section.footer.paragraphs if p.text.strip())
+        if t:
+            footer_texts.append(t)
+    footer = ""
+    if footer_texts:
+        footer = ('<div style="border-top:1px solid #ccc;margin-top:18px;padding-top:6px;color:#666;font-size:11px">'
+                  "바닥글: " + _esc(footer_texts[0]) + "</div>")
+    return ('<div style="background:#fff;color:#000;border:1px solid #bbb;box-shadow:0 2px 8px rgba(0,0,0,.15);'
+            'padding:32px 40px;font-family:Arial,sans-serif;font-size:11pt;line-height:1.45;overflow-x:auto">'
+            + body + footer + "</div>")
+
+
 def find_placeholders(template_bytes: bytes) -> set:
     """양식 안에서 발견된 자리표시자 키 집합"""
     found = set()
