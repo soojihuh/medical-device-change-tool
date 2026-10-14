@@ -27,13 +27,91 @@ from doc_fda import build_fda_document
 from doc_hc import build_hc_document
 from doc_eu import build_eu_document
 from doc_kr import build_kr_document
+from template_engine import (
+    COUNTRIES, placeholders_for, has_custom_template, template_path, save_custom_template,
+    delete_custom_template, build_context, render_docx, find_placeholders,
+)
+from default_templates import default_template_bytes
 
 
 st.set_page_config(page_title="의료기기 변경 평가 도구", page_icon="🏥", layout="wide")
 
 st.title("🏥 의료기기 변경 평가 및 인허가 문서 자동 생성 도구")
 st.caption("FDA / Health Canada / EU MDR / 식약처(MFDS) 가이던스 기반 변경 중대성 평가")
-st.caption("🔧 Build: 2026-09-14-KR-v1 (이 표시가 안 보이면 예전 페이지입니다 — 새로고침 해주세요)")
+st.caption("🔧 Build: 2026-10-15-Templates-v1 (이 표시가 안 보이면 예전 페이지입니다 — 새로고침 해주세요)")
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+page = st.sidebar.radio("메뉴",["📄 변경 평가·문서 생성", "🗂 국가별 양식 관리"])
+
+if page == "🗂 국가별 양식 관리":
+    st.header("국가별 Word 양식 관리")
+    st.markdown(
+        "국가별 문서 양식을 Word 파일로 내려받아 편집한 뒤 다시 올릴 수 있습니다. "
+        "양식 안에 `{{모델명}}` 처럼 **이중 중괄호로 쓴 자리표시자**를 넣으면, 문서 생성 시 입력값으로 자동 치환됩니다. "
+        "올린 양식이 있는 국가는 그 양식으로, 없으면 기본 양식(코드)으로 문서가 만들어집니다."
+    )
+    st.info(
+        "배포 사이트(Streamlit Cloud)는 재시작/재배포되면 여기서 올린 양식이 사라질 수 있습니다. "
+        "영구히 쓰려면 수정한 .docx 파일을 담당자(Claude)에게 전달해 저장소에 반영해 주세요."
+    )
+    country_labels = {"FDA": "🇺🇸 FDA", "HC": "🇨🇦 Health Canada", "EU": "🇪🇺 EU MDR", "KR": "🇰🇷 식약처(KR)"}
+    tabs = st.tabs([country_labels[c] for c in COUNTRIES])
+    for c, tab in zip(COUNTRIES, tabs):
+        with tab:
+            custom = has_custom_template(c)
+            st.write("현재 사용 중인 양식: " + ("**업로드한 양식**" if custom else "**기본 양식(코드)**"))
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.download_button(
+                    "⬇ 기본 양식 파일 받기 (자리표시자 포함)",
+                    data=default_template_bytes(c),
+                    file_name=f"{c}_template_default.docx",
+                    mime=DOCX_MIME,
+                    key=f"dl_default_{c}",
+                )
+            with col_b:
+                if custom:
+                    st.download_button(
+                        "⬇ 현재 업로드된 양식 받기",
+                        data=template_path(c).read_bytes(),
+                        file_name=f"{c}_template_current.docx",
+                        mime=DOCX_MIME,
+                        key=f"dl_current_{c}",
+                    )
+
+            uploaded = st.file_uploader("수정한 양식(.docx) 올리기", type=["docx"], key=f"up_{c}")
+            if uploaded is not None:
+                data = uploaded.getvalue()
+                try:
+                    found = find_placeholders(data)
+                except Exception as e:
+                    st.error(f"Word 파일을 읽을 수 없습니다: {e}")
+                    found = None
+                if found is not None:
+                    allowed = placeholders_for(c)
+                    unknown = sorted(found - set(allowed))
+                    st.write(f"발견된 자리표시자 {len(found)}개")
+                    if unknown:
+                        st.warning(
+                            "알 수 없는 자리표시자가 있어 치환되지 않고 그대로 남습니다: "
+                            + ", ".join(f"{{{{{u}}}}}" for u in unknown)
+                        )
+                    if st.button("이 양식으로 적용", key=f"apply_{c}", type="primary"):
+                        save_custom_template(c, data)
+                        st.success("적용했습니다. 다음 문서 생성부터 이 양식이 사용됩니다.")
+                        st.rerun()
+
+            if custom and st.button("기본 양식으로 되돌리기", key=f"reset_{c}"):
+                delete_custom_template(c)
+                st.success("기본 양식으로 되돌렸습니다.")
+                st.rerun()
+
+            with st.expander("사용할 수 있는 자리표시자 목록"):
+                for key, desc in placeholders_for(c).items():
+                    st.markdown(f"- `{{{{{key}}}}}` — {desc}")
+    st.stop()
 
 CATEGORY_MAP = {
     "Labeling / Nomenclature (라벨링 / 명칭)": "labeling",
@@ -485,7 +563,11 @@ if "assessment_results" in st.session_state:
                 doc_meta = dict(metadata)
                 doc_meta["docNumber"] = f"{metadata['docNumberPrefix']}-{country}-{datetime.now().strftime('%H%M%S')}"
 
-                if country == "FDA":
+                if has_custom_template(country):
+                    ctx = build_context(country, saved_product_info, saved_change_info, result, doc_meta)
+                    doc = render_docx(template_path(country).read_bytes(), ctx)
+                    filename = f"{country}_non-signification_{model_name_safe}.docx"
+                elif country == "FDA":
                     doc = build_fda_document(saved_product_info, saved_change_info, result, doc_meta)
                     filename = f"FDA_non-signification_{model_name_safe}.docx"
                 elif country == "HC":
