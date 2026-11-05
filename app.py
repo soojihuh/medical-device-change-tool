@@ -14,8 +14,10 @@ from pathlib import Path
 from io import BytesIO
 from datetime import datetime
 
+import time
+
 import streamlit as st
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
@@ -172,16 +174,42 @@ def walk_graph_ui(graph, start_id, prefix, rendered):
     return path, node_id
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def _translate_one(text: str, use_google: bool):
+    """한 건 번역 -> (결과, 구글 성공 여부). 구글이 요청 제한에 걸리면 간격을 두고 재시도하고,
+    그래도 안 되면 MyMemory로 대체한다. (성공한 결과만 캐시되므로 같은 문장은 다시 요청하지 않는다.)"""
+    last_error = None
+    if use_google:
+        time.sleep(0.3)  # 구글의 초당 요청 제한을 피하기 위한 간격
+        for wait in (0, 1, 2, 4):
+            if wait:
+                time.sleep(wait)
+            try:
+                result = GoogleTranslator(source="ko", target="en").translate(text)
+                if result and result.strip():
+                    return result, True
+                last_error = RuntimeError("번역 서비스가 빈 응답을 반환했습니다.")
+            except Exception as e:
+                last_error = e
+    if len(text) <= 450:  # MyMemory는 요청당 길이 제한이 있다
+        try:
+            result = MyMemoryTranslator(source="ko-KR", target="en-GB").translate(text)
+            if result and result.strip():
+                return result, False
+        except Exception as e:
+            last_error = e
+    raise last_error or RuntimeError("번역할 수 없습니다.")
+
+
 def translate_ko_to_en(text: str) -> str:
     text = (text or "").strip()
     if not text:
         return ""
-    result = GoogleTranslator(source="ko", target="en").translate(text)
-    if not result or not result.strip():
-        raise RuntimeError(
-            "번역 서비스가 빈 응답을 반환했습니다. 배포 환경의 네트워크가 "
-            "번역 서비스 접속을 차단하고 있을 수 있습니다."
-        )
+    use_google = time.time() > st.session_state.get("google_blocked_until", 0)
+    result, google_ok = _translate_one(text, use_google)
+    if use_google and not google_ok:
+        # 구글이 막힌 상태이므로 잠시 동안은 구글을 건너뛰고 바로 대체 서비스를 쓴다
+        st.session_state["google_blocked_until"] = time.time() + 120
     return result
 
 
@@ -254,7 +282,11 @@ if st.button("🌐 한→ 영 번역"):
         for k in EN_FIELD_KEYS:
             st.session_state.pop(k, None)
     except Exception as e:
-        st.error(f"번역 중 오류가 발생했습니다: {e}")
+        st.error(
+            "번역 서비스가 요청 제한(너무 많은 요청)으로 일시적으로 막혔습니다. "
+            "1~2분 뒤 다시 눌러 주세요. 계속 안 되면 아래 영문 칸에 직접 입력해도 됩니다. "
+            f"(상세: {e})"
+        )
 
 use_english = False
 if "change_info_en" in st.session_state:
